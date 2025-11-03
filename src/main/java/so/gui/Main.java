@@ -259,7 +259,7 @@ public class Main extends javax.swing.JFrame {
             }
         }
 
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < sistema.getMemoriaPrincipal().getMaxProcesos(); i++) {
             BCP bcp = sistema.getMemoriaPrincipal().obtenerBCP(i);
             if (bcp != null) {
                 Color color = coloresPorID.get(bcp.getIdProceso());
@@ -309,7 +309,7 @@ public class Main extends javax.swing.JFrame {
             modelo.addRow(new Object[]{i, valorMostrar});
         }
 
-        final int direccionActualFinal = direccionActual - 1;
+        final int direccionActualFinal = direccionActual;
         jTable_memoriaPrincipal.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value,
@@ -489,11 +489,11 @@ public class Main extends javax.swing.JFrame {
                     Thread.sleep(1000);
 
                     // Verificar si hay trabajo pendiente
-                    if (sistema.getColaListos().isEmpty() && sistema.getProcesoEnEjecucion() == null) {
+                    if (sistema.getColaListos().length == 0 && sistema.getProcesoEnEjecucion() == null) {
                         if (!sistema.hayProgramasPendientes()) {
                             break; // Todo terminado
                         }
-                        // Hay programas pendientes, esperar a que se carguen
+                        // Hay programas pendientes, esperar a que se carguen automáticamente
                         Thread.sleep(500);
                     }
                 }
@@ -569,6 +569,14 @@ public class Main extends javax.swing.JFrame {
             }
         } else {
             panelConsola.escribir("✗ No se pudo ejecutar la instrucción");
+        }
+        
+        // Verificar si terminó la ejecución
+        if (sistema.getProcesoEnEjecucion() == null && sistema.getColaListos().length == 0) {
+            if (!sistema.hayProgramasPendientes()) {
+                panelConsola.escribir("\n✓ Todos los procesos han terminado.");
+                mostrarEstadisticas();
+            }
         }
     }
 
