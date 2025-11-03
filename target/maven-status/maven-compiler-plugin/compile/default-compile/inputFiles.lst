@@ -1,0 +1,17 @@
+C:\Users\dylan\OneDrive\Documentos\NetBeansProjects\sistemaoperativo\src\main\java\so\cpu\CPU.java
+C:\Users\dylan\OneDrive\Documentos\NetBeansProjects\sistemaoperativo\src\main\java\so\estadisticas\EstadisticasProceso.java
+C:\Users\dylan\OneDrive\Documentos\NetBeansProjects\sistemaoperativo\src\main\java\so\gestordeprocesos\BCP.java
+C:\Users\dylan\OneDrive\Documentos\NetBeansProjects\sistemaoperativo\src\main\java\so\gestordeprocesos\Despachador.java
+C:\Users\dylan\OneDrive\Documentos\NetBeansProjects\sistemaoperativo\src\main\java\so\gestordeprocesos\EstadoProceso.java
+C:\Users\dylan\OneDrive\Documentos\NetBeansProjects\sistemaoperativo\src\main\java\so\gui\Main.java
+C:\Users\dylan\OneDrive\Documentos\NetBeansProjects\sistemaoperativo\src\main\java\so\gui\PanelConsola.java
+C:\Users\dylan\OneDrive\Documentos\NetBeansProjects\sistemaoperativo\src\main\java\so\instrucciones\CodigoOperacion.java
+C:\Users\dylan\OneDrive\Documentos\NetBeansProjects\sistemaoperativo\src\main\java\so\instrucciones\EjecutorInstrucciones.java
+C:\Users\dylan\OneDrive\Documentos\NetBeansProjects\sistemaoperativo\src\main\java\so\instrucciones\Instruccion.java
+C:\Users\dylan\OneDrive\Documentos\NetBeansProjects\sistemaoperativo\src\main\java\so\instrucciones\InstruccionParser.java
+C:\Users\dylan\OneDrive\Documentos\NetBeansProjects\sistemaoperativo\src\main\java\so\instrucciones\Registro.java
+C:\Users\dylan\OneDrive\Documentos\NetBeansProjects\sistemaoperativo\src\main\java\so\main\SistemaOperativo.java
+C:\Users\dylan\OneDrive\Documentos\NetBeansProjects\sistemaoperativo\src\main\java\so\memoria\MemoriaPrincipal.java
+C:\Users\dylan\OneDrive\Documentos\NetBeansProjects\sistemaoperativo\src\main\java\so\memoria\MemoriaSecundaria.java
+C:\Users\dylan\OneDrive\Documentos\NetBeansProjects\sistemaoperativo\src\main\java\so\planificacion\IPlanificador.java
+C:\Users\dylan\OneDrive\Documentos\NetBeansProjects\sistemaoperativo\src\main\java\so\planificacion\PlanificadorFIFO.java
