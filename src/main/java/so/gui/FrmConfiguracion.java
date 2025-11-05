@@ -218,6 +218,12 @@ public class FrmConfiguracion extends javax.swing.JFrame {
         jLabel7.setFont(new java.awt.Font("Segoe UI", 1, 14)); // NOI18N
         jLabel7.setText("Tamaño para el usuario:");
 
+        jTextField_totalUsuario.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jTextField_totalUsuarioActionPerformed(evt);
+            }
+        });
+
         jLabel8.setFont(new java.awt.Font("Segoe UI", 1, 18)); // NOI18N
         jLabel8.setText("Memoria Principal");
 
@@ -433,6 +439,10 @@ public class FrmConfiguracion extends javax.swing.JFrame {
 
         pack();
     }// </editor-fold>//GEN-END:initComponents
+
+    private void jTextField_totalUsuarioActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jTextField_totalUsuarioActionPerformed
+        // TODO add your handling code here:
+    }//GEN-LAST:event_jTextField_totalUsuarioActionPerformed
 
     /**
      * @param args the command line arguments

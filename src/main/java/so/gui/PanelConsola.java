@@ -63,20 +63,29 @@ public class PanelConsola extends JPanel {
         add(new JScrollPane(salida), BorderLayout.CENTER);
         add(entrada, BorderLayout.SOUTH);
 
-        // Redirigir System.out y System.err a la consola
+        // Redirigir System.out y System.err a la consola con soporte UTF-8
         PrintStream out = new PrintStream(new OutputStream() {
+            private final StringBuilder buffer = new StringBuilder();
+
             @Override
             public void write(int b) {
-                SwingUtilities.invokeLater(() -> {
-                    try {
-                        doc.insertString(doc.getLength(), String.valueOf((char) b), estiloNormal);
-                        salida.setCaretPosition(doc.getLength());
-                    } catch (BadLocationException ex) {
-                        // ignorar
-                    }
-                });
+                if (b == '\n') {
+                    final String texto = buffer.toString();
+                    buffer.setLength(0);
+                    SwingUtilities.invokeLater(() -> {
+                        try {
+                            doc.insertString(doc.getLength(), texto + "\n", estiloNormal);
+                            salida.setCaretPosition(doc.getLength());
+                        } catch (BadLocationException ex) {
+                            // ignorar
+                        }
+                    });
+                } else {
+                    buffer.append((char) b);
+                }
             }
-        });
+        }, true, java.nio.charset.StandardCharsets.UTF_8);
+
 
         System.setOut(out);
         System.setErr(out);

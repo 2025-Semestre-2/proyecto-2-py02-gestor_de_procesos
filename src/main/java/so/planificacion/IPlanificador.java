@@ -1,6 +1,6 @@
 package so.planificacion;
 
-import so.memoria.MemoriaPrincipal;
+import so.memoria.MemoriaPrincipalV2;
 import so.gestordeprocesos.BCP;
 
 /**
@@ -17,7 +17,7 @@ public interface IPlanificador {
      * @param memoria referencia a la memoria principal
      * @return número de BCP (0-4) seleccionado o -1 si no hay procesos
      */
-    int seleccionarSiguiente(MemoriaPrincipal memoria);
+    int seleccionarSiguiente(MemoriaPrincipalV2 memoria);
     
     /**
      * Obtiene el nombre del algoritmo de planificación

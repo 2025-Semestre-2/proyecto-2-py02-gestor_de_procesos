@@ -1,7 +1,7 @@
 package so.instrucciones;
 
 import so.cpu.CPU;
-import so.memoria.MemoriaPrincipal;
+import so.memoria.MemoriaPrincipalV2;
 import so.gestordeprocesos.Despachador;
 import so.gestordeprocesos.BCP;
 import so.gestordeprocesos.EstadoProceso;
@@ -24,7 +24,7 @@ import java.util.List;
 public class EjecutorInstrucciones {
     
     private final CPU cpu;
-    private final MemoriaPrincipal memoria;
+    private final MemoriaPrincipalV2 memoria;
     private final Despachador despachador;
     private final List<String> pantalla; // buffer de salida para INT 10H
     
@@ -34,7 +34,7 @@ public class EjecutorInstrucciones {
      * @param memoria referencia a la memoria principal
      * @param despachador referencia al despachador
      */
-    public EjecutorInstrucciones(MemoriaPrincipal memoria, Despachador despachador) {
+    public EjecutorInstrucciones(MemoriaPrincipalV2 memoria, Despachador despachador) {
         if (memoria == null || despachador == null) {
             throw new IllegalArgumentException("Memoria y despachador no pueden ser nulos");
         }

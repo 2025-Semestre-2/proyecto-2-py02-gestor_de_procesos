@@ -5,15 +5,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Bloque de Control de Procesos (BCP).
- * Contiene toda la información necesaria para gestionar un proceso.
+ * Bloque de Control de Procesos (BCP) - MODIFICADO para Particionamiento Fijo.
  * 
- * Estructura de 25 atributos que se serializan en memoria principal.
+ * Atributos adicionales para particionamiento:
+ * - indiceParticion: índice de la partición asignada al proceso
+ * - tamanoParticion: tamaño de la partición asignada
+ * - fragmentacionInterna: espacio desperdiciado en la partición
+ * 
+ * Estructura de 28 atributos (original: 25, nuevos: 3)
  * 
  * @author dylan
  */
 public class BCP {
-    
     // ========== IDENTIFICACIÓN ==========
     private int idProceso;
     private String nombreProceso;
@@ -55,6 +58,12 @@ public class BCP {
     private int tamanoParticion;        // Tamaño de la partición asignada
     private int fragmentacionInterna;   // Espacio desperdiciado (tamanoParticion - tamanoProceso)
     
+    // ========== ATRIBUTOS ADICIONALES PARA PARTICIONAMIENTO DINÁMICO (BUDDY SYSTEM) ==========
+    private int indiceBloqueMemoria;    // Índice del bloque en la lista de bloques libres/ocupados
+    private int tamanoBloqueAsignado;   // Tamaño real del bloque asignado (potencia de 2)
+    private int nivelBuddy;             // Nivel en el árbol buddy (0 = bloque más grande)
+    private int direccionBloque;        // Dirección de inicio del bloque en memoria
+    
     /**
      * Constructor completo para crear un nuevo BCP
      */
@@ -94,10 +103,16 @@ public class BCP {
         // Otros
         this.archivosAbiertos = new ArrayList<>();
         
-        // Particionamiento fijo
+        // Inicializar atributos de particionamiento
         this.indiceParticion = -1;
         this.tamanoParticion = 0;
         this.fragmentacionInterna = 0;
+        
+        // Inicializar atributos de buddy system
+        this.indiceBloqueMemoria = -1;
+        this.tamanoBloqueAsignado = 0;
+        this.nivelBuddy = -1;
+        this.direccionBloque = -1;      
     }
     
     /**
@@ -108,8 +123,13 @@ public class BCP {
         this.archivosAbiertos = new ArrayList<>();
         this.indiceParticion = -1;
         this.tamanoParticion = 0;
-        this.fragmentacionInterna = 0;        
+        this.fragmentacionInterna = 0;
+        this.indiceBloqueMemoria = -1;
+        this.tamanoBloqueAsignado = 0;
+        this.nivelBuddy = -1;
+        this.direccionBloque = -1;
     }
+    
     
     // ========== GESTIÓN DE PILA ==========
     
@@ -232,7 +252,7 @@ public class BCP {
             default -> throw new IllegalArgumentException("Registro desconocido: " + nombre);
         }
     }
-
+    
     // ========== MÉTODOS ESPECÍFICOS DE PARTICIONAMIENTO FIJO ==========
     
     /**
@@ -290,10 +310,74 @@ public class BCP {
         );
     }
     
-    // ========== SERIALIZACIÓN ==========
+    // ========== MÉTODOS ESPECÍFICOS DE PARTICIONAMIENTO DINÁMICO (BUDDY SYSTEM) ==========
     
     /**
-     * Guarda el BCP en memoria principal
+     * Asigna un bloque buddy al proceso
+     */
+    public void asignarBloqueBuddy(int indiceBloque, int tamanoBloque, int nivel, int direccion) {
+        this.indiceBloqueMemoria = indiceBloque;
+        this.tamanoBloqueAsignado = tamanoBloque;
+        this.nivelBuddy = nivel;
+        this.direccionBloque = direccion;
+        
+        // Calcular fragmentación interna para buddy system
+        this.fragmentacionInterna = tamanoBloque - this.tamanoProceso;
+        if (this.fragmentacionInterna < 0) {
+            this.fragmentacionInterna = 0;
+        }
+    }
+    
+    /**
+     * Libera el bloque buddy asignado
+     */
+    public void liberarBloqueBuddy() {
+        this.indiceBloqueMemoria = -1;
+        this.tamanoBloqueAsignado = 0;
+        this.nivelBuddy = -1;
+        this.direccionBloque = -1;
+    }
+    
+    /**
+     * Verifica si el proceso tiene un bloque buddy asignado
+     */
+    public boolean tieneBloqueBuddyAsignado() {
+        return indiceBloqueMemoria >= 0;
+    }
+    
+    /**
+     * Calcula el porcentaje de uso del bloque buddy
+     */
+    public double getPorcentajeUsoBuddy() {
+        if (tamanoBloqueAsignado == 0) return 0.0;
+        return (double) this.tamanoProceso / tamanoBloqueAsignado * 100.0;
+    }
+    
+    /**
+     * Obtiene información sobre el bloque buddy asignado
+     */
+    public String getInfoBloqueBuddy() {
+        if (!tieneBloqueBuddyAsignado()) {
+            return "Sin bloque buddy asignado";
+        }
+        
+        return String.format(
+            "Bloque %d (Nivel %d): %d KB asignados, %d KB usados, %.1f%% uso, %d KB desperdiciados, Dir: %d",
+            indiceBloqueMemoria,
+            nivelBuddy,
+            tamanoBloqueAsignado,
+            this.tamanoProceso,
+            getPorcentajeUsoBuddy(),
+            fragmentacionInterna,
+            direccionBloque
+        );
+    }
+   
+    // ========== SERIALIZACIÓN ==========
+    
+    
+    /**
+     * Guarda el BCP en memoria principal (36 atributos: 25 originales + 3 fijo + 4 buddy + 4 segmentación)
      * Cada atributo ocupa una posición en el array
      * 
      * @param memoria array de memoria principal
@@ -325,13 +409,21 @@ public class BCP {
         memoria[indiceInicio + 22] = tiempoEspera;
         memoria[indiceInicio + 23] = quantumRestante;
         memoria[indiceInicio + 24] = archivosAbiertos;
+        
+        // Atributos de particionamiento fijo (posiciones 25, 26, 27)
         memoria[indiceInicio + 25] = indiceParticion;
         memoria[indiceInicio + 26] = tamanoParticion;
-        memoria[indiceInicio + 27] = fragmentacionInterna;        
+        memoria[indiceInicio + 27] = fragmentacionInterna;
+        
+        // Atributos de buddy system (posiciones 28, 29, 30, 31)
+        memoria[indiceInicio + 28] = indiceBloqueMemoria;
+        memoria[indiceInicio + 29] = tamanoBloqueAsignado;
+        memoria[indiceInicio + 30] = nivelBuddy;
+        memoria[indiceInicio + 31] = direccionBloque;       
     }
     
     /**
-     * Carga un BCP desde memoria principal
+     * Carga un BCP desde memoria principal (36 atributos)
      * 
      * @param memoria array de memoria principal
      * @param indiceInicio índice donde comienza este BCP
@@ -366,10 +458,18 @@ public class BCP {
         bcp.tiempoEspera = (Integer) memoria[indiceInicio + 22];
         bcp.quantumRestante = (Integer) memoria[indiceInicio + 23];
         bcp.archivosAbiertos = (List<String>) memoria[indiceInicio + 24];
+        
+        // Cargar los 3 atributos de particionamiento fijo
         bcp.indiceParticion = (Integer) memoria[indiceInicio + 25];
         bcp.tamanoParticion = (Integer) memoria[indiceInicio + 26];
-        bcp.fragmentacionInterna = (Integer) memoria[indiceInicio + 27];        
+        bcp.fragmentacionInterna = (Integer) memoria[indiceInicio + 27];
         
+        // Cargar los 4 atributos de buddy system
+        bcp.indiceBloqueMemoria = (Integer) memoria[indiceInicio + 28];
+        bcp.tamanoBloqueAsignado = (Integer) memoria[indiceInicio + 29];
+        bcp.nivelBuddy = (Integer) memoria[indiceInicio + 30];
+        bcp.direccionBloque = (Integer) memoria[indiceInicio + 31];
+             
         return bcp;
     }
     
@@ -551,6 +651,7 @@ public class BCP {
         this.archivosAbiertos = archivosAbiertos;
     }
     
+    // ========== GETTERS Y SETTERS DE PARTICIONAMIENTO ==========
     public int getIndiceParticion() {
         return indiceParticion;
     }
@@ -573,11 +674,85 @@ public class BCP {
     
     public void setFragmentacionInterna(int fragmentacionInterna) {
         this.fragmentacionInterna = fragmentacionInterna;
+    }
+
+    public int getIndiceBloqueMemoria() {
+        return indiceBloqueMemoria;
+    }
+    
+    public void setIndiceBloqueMemoria(int indiceBloqueMemoria) {
+        this.indiceBloqueMemoria = indiceBloqueMemoria;
+    }
+
+    public int getTamanoBloqueAsignado() {
+        return tamanoBloqueAsignado;
+    }
+    
+    public void setTamanoBloqueAsignado(int tamanoBloqueAsignado) {
+        this.tamanoBloqueAsignado = tamanoBloqueAsignado;
     }    
+    
+    public int getNivelBuddy() {
+        return nivelBuddy;
+    }
+    
+    public void setNivelBuddy(int nivelBuddy) {
+        this.nivelBuddy = nivelBuddy;
+    }  
+
+    public int getDireccionBloque() {
+        return direccionBloque;
+    }
+    
+    public void setDireccionBloque(int direccionBloque) {
+        this.direccionBloque = direccionBloque;
+    } 
     
     @Override
     public String toString() {
-        return String.format("BCP[id=%d, nombre=%s, estado=%s, PC=%d/%d, base=%d]",
-                idProceso, nombreProceso, estado, PC, tamanoProceso, direccionBase);
+        return String.format(
+            "BCP[id=%d, nombre=%s, estado=%s, PC=%d/%d, partición=%d(%dKB)]",
+            getIdProceso(), 
+            getNombreProceso(), 
+            getEstado(), 
+            getPC(), 
+            getTamanoProceso(),
+            indiceParticion,
+            tamanoParticion
+        );
+    }
+    
+    /**
+     * Genera un reporte detallado del BCP con información de particionamiento
+     */
+    public String generarReporteDetallado() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("========================================\n");
+        sb.append(String.format("Proceso: %s (ID: %d)\n", getNombreProceso(), getIdProceso()));
+        sb.append(String.format("Estado: %s\n", getEstado()));
+        sb.append(String.format("PC: %d / %d (%.1f%%)\n", 
+            getPC(), getTamanoProceso(), getProgreso()));
+        sb.append(String.format("Dirección base: %d\n", getDireccionBase()));
+        
+        sb.append("\n--- Particionamiento ---\n");
+        if (tieneParticionAsignada()) {
+            sb.append(getInfoParticion()).append("\n");
+        } else {
+            sb.append("Sin partición asignada\n");
+        }
+        
+        sb.append("\n--- Registros ---\n");
+        sb.append(String.format("  AC: %d\n", getAC()));
+        sb.append(String.format("  AX: %d\n", getAX()));
+        sb.append(String.format("  BX: %d\n", getBX()));
+        sb.append(String.format("  CX: %d\n", getCX()));
+        sb.append(String.format("  DX: %d\n", getDX()));
+        
+        sb.append("\n--- Tiempos ---\n");
+        sb.append(String.format("Tiempo CPU usado: %d seg\n", getTiempoCPUUsado()));
+        sb.append(String.format("Tiempo espera: %d seg\n", getTiempoEspera()));
+        
+        sb.append("========================================\n");
+        return sb.toString();
     }
 }

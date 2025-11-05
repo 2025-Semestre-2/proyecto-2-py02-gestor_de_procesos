@@ -1,6 +1,6 @@
 package so.gestordeprocesos;
 
-import so.memoria.MemoriaPrincipal;
+import so.memoria.MemoriaPrincipalV2;
 
 /**
  * Despachador (Dispatcher) del sistema operativo.
@@ -15,14 +15,14 @@ import so.memoria.MemoriaPrincipal;
  */
 public class Despachador {
     
-    private final MemoriaPrincipal memoria;
+    private final MemoriaPrincipalV2 memoria;
     
     /**
      * Constructor del despachador
      * 
      * @param memoria referencia a la memoria principal
      */
-    public Despachador(MemoriaPrincipal memoria) {
+    public Despachador(MemoriaPrincipalV2 memoria) {
         if (memoria == null) {
             throw new IllegalArgumentException("La memoria no puede ser nula");
         }

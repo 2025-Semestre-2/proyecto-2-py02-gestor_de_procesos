@@ -1,6 +1,6 @@
 package so.planificacion;
 
-import so.memoria.MemoriaPrincipal;
+import so.memoria.MemoriaPrincipalV2;
 import so.gestordeprocesos.BCP;
 
 /**
@@ -18,7 +18,7 @@ import so.gestordeprocesos.BCP;
 public class PlanificadorFIFO implements IPlanificador {
     
     @Override
-    public int seleccionarSiguiente(MemoriaPrincipal memoria) {
+    public int seleccionarSiguiente(MemoriaPrincipalV2 memoria) {
         // FIFO simplemente desencola el primer elemento de la cola de listos
         return memoria.desencolarListo();
     }
