@@ -47,7 +47,7 @@ public class SistemaOperativo {
      * Constructor del sistema operativo con planificador por defecto (FIFO)
      */
     public SistemaOperativo() {
-        this(new PlanificadorHRRN());
+        this(new PlanificadorFIFO());
     }
     
     /**

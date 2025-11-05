@@ -98,9 +98,17 @@ public class Main extends javax.swing.JFrame {
                 return false;
             }
         };
+
         jTable.setModel(modelo);
         jTable.getTableHeader().setResizingAllowed(false);
         jTable.getTableHeader().setReorderingAllowed(false);
+
+        // Ajustar ancho de columnas
+        jTable.getColumnModel().getColumn(0).setPreferredWidth(60);
+        jTable.getColumnModel().getColumn(1).setPreferredWidth(240);
+
+        jTable.getColumnModel().getColumn(0).setResizable(false);
+        jTable.getColumnModel().getColumn(1).setResizable(false);
     }
 
     private void inicializarTablaEstados() {
@@ -832,9 +840,9 @@ public class Main extends javax.swing.JFrame {
                     .addGroup(layout.createSequentialGroup()
                         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addComponent(jLabel1)
-                            .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 300, javax.swing.GroupLayout.PREFERRED_SIZE)
                             .addComponent(jScrollPane6, javax.swing.GroupLayout.PREFERRED_SIZE, 297, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(jLabel5))
+                            .addComponent(jLabel5)
+                            .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 300, javax.swing.GroupLayout.PREFERRED_SIZE))
                         .addGap(30, 30, 30)
                         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addComponent(jLabel2)

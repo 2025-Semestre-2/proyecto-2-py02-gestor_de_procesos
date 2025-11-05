@@ -50,6 +50,11 @@ public class BCP {
     // ========== OTROS ==========
     private List<String> archivosAbiertos; // para futura expansión INT 21H
     
+    // ========== ATRIBUTOS ADICIONALES PARA PARTICIONAMIENTO FIJO ==========
+    private int indiceParticion;        // Índice de partición asignada (0-22)
+    private int tamanoParticion;        // Tamaño de la partición asignada
+    private int fragmentacionInterna;   // Espacio desperdiciado (tamanoParticion - tamanoProceso)
+    
     /**
      * Constructor completo para crear un nuevo BCP
      */
@@ -88,6 +93,11 @@ public class BCP {
         
         // Otros
         this.archivosAbiertos = new ArrayList<>();
+        
+        // Particionamiento fijo
+        this.indiceParticion = -1;
+        this.tamanoParticion = 0;
+        this.fragmentacionInterna = 0;
     }
     
     /**
@@ -96,6 +106,9 @@ public class BCP {
     public BCP() {
         this.pila = new int[5];
         this.archivosAbiertos = new ArrayList<>();
+        this.indiceParticion = -1;
+        this.tamanoParticion = 0;
+        this.fragmentacionInterna = 0;        
     }
     
     // ========== GESTIÓN DE PILA ==========
@@ -219,6 +232,63 @@ public class BCP {
             default -> throw new IllegalArgumentException("Registro desconocido: " + nombre);
         }
     }
+
+    // ========== MÉTODOS ESPECÍFICOS DE PARTICIONAMIENTO FIJO ==========
+    
+    /**
+     * Asigna una partición al proceso
+     */
+    public void asignarParticion(int indiceParticion, int tamanoParticion) {
+        this.indiceParticion = indiceParticion;
+        this.tamanoParticion = tamanoParticion;
+        this.fragmentacionInterna = tamanoParticion - this.tamanoProceso;
+        
+        if (this.fragmentacionInterna < 0) {
+            this.fragmentacionInterna = 0;
+        }
+    }
+    
+    /**
+     * Libera la partición asignada
+     */
+    public void liberarParticion() {
+        this.indiceParticion = -1;
+        this.tamanoParticion = 0;
+        this.fragmentacionInterna = 0;
+    }
+    
+    /**
+     * Verifica si el proceso tiene una partición asignada
+     */
+    public boolean tieneParticionAsignada() {
+        return indiceParticion >= 0;
+    }
+    
+    /**
+     * Calcula el porcentaje de uso de la partición
+     */
+    public double getPorcentajeUsoParticion() {
+        if (tamanoParticion == 0) return 0.0;
+        return (double) this.tamanoProceso / tamanoParticion * 100.0;
+    }
+    
+    /**
+     * Obtiene información sobre la partición asignada
+     */
+    public String getInfoParticion() {
+        if (!tieneParticionAsignada()) {
+            return "Sin partición asignada";
+        }
+        
+        return String.format(
+            "Partición %d: %d KB asignados, %d KB usados, %.1f%% uso, %d KB desperdiciados",
+            indiceParticion,
+            tamanoParticion,
+            this.tamanoProceso,
+            getPorcentajeUsoParticion(),
+            fragmentacionInterna
+        );
+    }
     
     // ========== SERIALIZACIÓN ==========
     
@@ -255,6 +325,9 @@ public class BCP {
         memoria[indiceInicio + 22] = tiempoEspera;
         memoria[indiceInicio + 23] = quantumRestante;
         memoria[indiceInicio + 24] = archivosAbiertos;
+        memoria[indiceInicio + 25] = indiceParticion;
+        memoria[indiceInicio + 26] = tamanoParticion;
+        memoria[indiceInicio + 27] = fragmentacionInterna;        
     }
     
     /**
@@ -293,6 +366,9 @@ public class BCP {
         bcp.tiempoEspera = (Integer) memoria[indiceInicio + 22];
         bcp.quantumRestante = (Integer) memoria[indiceInicio + 23];
         bcp.archivosAbiertos = (List<String>) memoria[indiceInicio + 24];
+        bcp.indiceParticion = (Integer) memoria[indiceInicio + 25];
+        bcp.tamanoParticion = (Integer) memoria[indiceInicio + 26];
+        bcp.fragmentacionInterna = (Integer) memoria[indiceInicio + 27];        
         
         return bcp;
     }
@@ -474,6 +550,30 @@ public class BCP {
     public void setArchivosAbiertos(List<String> archivosAbiertos) {
         this.archivosAbiertos = archivosAbiertos;
     }
+    
+    public int getIndiceParticion() {
+        return indiceParticion;
+    }
+    
+    public void setIndiceParticion(int indiceParticion) {
+        this.indiceParticion = indiceParticion;
+    }
+    
+    public int getTamanoParticion() {
+        return tamanoParticion;
+    }
+    
+    public void setTamanoParticion(int tamanoParticion) {
+        this.tamanoParticion = tamanoParticion;
+    }
+    
+    public int getFragmentacionInterna() {
+        return fragmentacionInterna;
+    }
+    
+    public void setFragmentacionInterna(int fragmentacionInterna) {
+        this.fragmentacionInterna = fragmentacionInterna;
+    }    
     
     @Override
     public String toString() {
