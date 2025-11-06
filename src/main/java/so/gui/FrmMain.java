@@ -4,8 +4,7 @@ import java.awt.Color;
 import java.awt.Component;
 import javax.swing.table.DefaultTableModel;
 import so.main.SistemaOperativoV2;
-import so.planificacion.PlanificadorFIFO;
-import so.planificacion.PlanificadorSJF;
+import so.planificacion.*;
 import so.planificacion.IPlanificador;
 import java.util.List;
 import java.util.ArrayList;
@@ -23,7 +22,6 @@ import so.gestordeprocesos.BCP;
 import so.instrucciones.Instruccion;
 import javax.swing.Timer;
 import javax.swing.SwingUtilities;
-import so.planificacion.PlanificadorHRRN;
 
 /**
  *
@@ -80,7 +78,7 @@ public class FrmMain extends javax.swing.JFrame {
             
             // Planificadores (FIFO para CPU 0, SJF para CPU 1)
             IPlanificador[] planificadores = new IPlanificador[] {
-                new PlanificadorFIFO()              
+                new PlanificadorRR()              
             };
             
             // Crear sistema operativo

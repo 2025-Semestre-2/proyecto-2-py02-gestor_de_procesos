@@ -1,6 +1,6 @@
 package so.planificacion;
 
-import so.memoria.MemoriaPrincipal;
+import so.memoria.MemoriaPrincipalV2;
 import so.gestordeprocesos.BCP;
 import so.gestordeprocesos.EstadoProceso;
 
@@ -43,7 +43,7 @@ public class PlanificadorRR implements IPlanificador {
     }
     
     @Override
-    public int seleccionarSiguiente(MemoriaPrincipal memoria) {
+    public int seleccionarSiguiente(MemoriaPrincipalV2 memoria) {
         int procesoEnEjecucion = memoria.getBCPEnEjecucion();
         
         // Si hay un proceso en ejecución, verificar su quantum

@@ -1,6 +1,6 @@
 package so.planificacion;
 
-import so.memoria.MemoriaPrincipal;
+import so.memoria.MemoriaPrincipalV2;
 import so.gestordeprocesos.BCP;
 import so.gestordeprocesos.EstadoProceso;
 import java.util.*;
@@ -21,7 +21,7 @@ public class PlanificadorSRT implements IPlanificador {
     private int procesoAnterior = -1;
     
     @Override
-    public int seleccionarSiguiente(MemoriaPrincipal memoria) {
+    public int seleccionarSiguiente(MemoriaPrincipalV2 memoria) {
         int[] colaListos = memoria.obtenerColaListos();
         int procesoActual = memoria.getBCPEnEjecucion();
         
@@ -96,7 +96,7 @@ public class PlanificadorSRT implements IPlanificador {
     /**
      * Remueve un elemento de la cola de listos en un índice específico
      */
-    private void removerDeCola(MemoriaPrincipal memoria, int indice) {
+    private void removerDeCola(MemoriaPrincipalV2 memoria, int indice) {
         int[] cola = memoria.obtenerColaListos();
         
         List<Integer> temp = new ArrayList<>();
