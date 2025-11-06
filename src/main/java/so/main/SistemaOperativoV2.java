@@ -13,15 +13,13 @@ import so.planificacion.IPlanificador;
 import so.estadisticas.EstadisticasProceso;
 
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import so.memoria.estrategias.EstrategiaParticionamientoDinamico;
 import so.memoria.estrategias.EstrategiaParticionamientoFijo;
 
 /**
  * Clase principal del Sistema Operativo simulado.
  * Coordina la ejecución de múltiples CPUs y la gestión de procesos.
+ * ACTUALIZADO: Soporte para ejecución automática y paso a paso
  * 
  * @author dylan
  */
@@ -42,8 +40,8 @@ public class SistemaOperativoV2 {
     private final IPlanificador[] planificadores;
     
     // ========== CONTROL Y ESTADÍSTICAS ==========
-    private final ExecutorService executorService;
     private volatile boolean sistemaActivo;
+    private volatile boolean ejecucionPausada;
     private final Map<Integer, ProcesoInfo> informacionProcesos;
     private final List<EstadisticasProceso> estadisticasCompletados;
     private final Random random;
@@ -51,6 +49,10 @@ public class SistemaOperativoV2 {
     // ========== COLAS DE CONTROL ==========
     private final Queue<String> programasPendientes;
     private final Map<Integer, Integer> distribucionProcesos; // CPU -> cantidad procesos
+    private final Map<Integer, Integer> cpuProcesoActual; // CPU -> numeroBCP actual
+    
+    // ========== LISTENERS PARA GUI ==========
+    private final List<SistemaListener> listeners;
     
     /**
      * Información de proceso para la interfaz gráfica
@@ -78,14 +80,17 @@ public class SistemaOperativoV2 {
     }
     
     /**
+     * Interface para listeners de eventos del sistema
+     */
+    public interface SistemaListener {
+        void onProcesoEjecutado(int cpu, BCP bcp);
+        void onProcesoFinalizado(int cpu, BCP bcp);
+        void onProcesoNuevo(BCP bcp);
+        void onEstadoCambiado(boolean activo, boolean pausado);
+    }
+    
+    /**
      * Constructor del Sistema Operativo
-     * @param tamanoMemSecundaria
-     * @param tamanoMemVirtual
-     * @param tamanoMemUsuario
-     * @param tipoEstrategia
-     * @param configEstrategia
-     * @param cantidadCPUs
-     * @param algoritmosPlanificacion
      */
     public SistemaOperativoV2(int tamanoMemSecundaria, int tamanoMemVirtual,
                           int tamanoMemUsuario, String tipoEstrategia, Object configEstrategia, 
@@ -119,30 +124,63 @@ public class SistemaOperativoV2 {
         }
         
         // Inicializar estructuras de control
-        this.executorService = Executors.newFixedThreadPool(cantidadCPUs);
         this.sistemaActivo = false;
-        this.informacionProcesos = new HashMap<>();
-        this.estadisticasCompletados = new ArrayList<>();
+        this.ejecucionPausada = false;
+        this.informacionProcesos = Collections.synchronizedMap(new HashMap<>());
+        this.estadisticasCompletados = Collections.synchronizedList(new ArrayList<>());
         this.random = new Random();
         this.programasPendientes = new LinkedList<>();
         this.distribucionProcesos = new HashMap<>();
+        this.cpuProcesoActual = new HashMap<>();
+        this.listeners = new ArrayList<>();
         
         // Inicializar distribución de CPUs
         for (int i = 0; i < cantidadCPUs; i++) {
             distribucionProcesos.put(i, 0);
+            cpuProcesoActual.put(i, -1);
         }
         
         System.out.println("[SISTEMA OPERATIVO] Inicializado con " + cantidadCPUs + " CPUs");
+    }
+    
+    // ========== GESTIÓN DE LISTENERS ==========
+    
+    public void addListener(SistemaListener listener) {
+        listeners.add(listener);
+    }
+    
+    public void removeListener(SistemaListener listener) {
+        listeners.remove(listener);
+    }
+    
+    private void notificarProcesoEjecutado(int cpu, BCP bcp) {
+        for (SistemaListener listener : listeners) {
+            listener.onProcesoEjecutado(cpu, bcp);
+        }
+    }
+    
+    private void notificarProcesoFinalizado(int cpu, BCP bcp) {
+        for (SistemaListener listener : listeners) {
+            listener.onProcesoFinalizado(cpu, bcp);
+        }
+    }
+    
+    private void notificarProcesoNuevo(BCP bcp) {
+        for (SistemaListener listener : listeners) {
+            listener.onProcesoNuevo(bcp);
+        }
+    }
+    
+    private void notificarEstadoCambiado() {
+        for (SistemaListener listener : listeners) {
+            listener.onEstadoCambiado(sistemaActivo, ejecucionPausada);
+        }
     }
     
     // ========== GESTIÓN DE ARCHIVOS Y PROGRAMAS ==========
     
     /**
      * Carga archivos a memoria secundaria
-     * 
-     * @param nombres nombres de los programas
-     * @param programas contenido de los programas (líneas de código)
-     * @return true si se cargaron correctamente
      */
     public boolean cargarArchivosMemoriaSecundaria(String[] nombres, List<String>[] programas) {
         try {
@@ -151,7 +189,7 @@ public class SistemaOperativoV2 {
             // Agregar a la cola de programas pendientes
             programasPendientes.addAll(Arrays.asList(nombres));
             
-            System.out.println("[SO] programas cargados a memoria secundaria");
+            System.out.println("[SO] " + nombres.length + " programas cargados a memoria secundaria");
             return true;
             
         } catch (Exception e) {
@@ -180,13 +218,9 @@ public class SistemaOperativoV2 {
                 return new EstrategiaParticionamientoDinamico();
                 
             case "VARIABLE":
-                // Implementar para estrategia variable si existe
-                // return new EstrategiaParticionamientoVariable();
                 throw new UnsupportedOperationException("Estrategia VARIABLE no implementada aún");
                 
             case "PAGINACION":
-                // Implementar para paginación si existe
-                // return new EstrategiaPaginacion();
                 throw new UnsupportedOperationException("Estrategia PAGINACION no implementada aún");
                 
             default:
@@ -196,8 +230,6 @@ public class SistemaOperativoV2 {
     
     /**
      * Carga programas a memoria principal distribuidos entre las CPUs
-     * 
-     * @return número de programas cargados exitosamente
      */
     public int cargarProgramasMemoriaPrincipal() {
         int programasCargados = 0;
@@ -224,7 +256,6 @@ public class SistemaOperativoV2 {
                         }
                     } catch (Exception e) {
                         System.err.println("[SO] Instrucción inválida en " + nombrePrograma + ": " + linea);
-                        // Continuar con las siguientes instrucciones
                     }
                 }
                 
@@ -260,8 +291,10 @@ public class SistemaOperativoV2 {
                 // Asociar asignación de memoria al proceso
                 memoriaPrincipal.asociarAsignacionAProceso(bcp, infoAsignacion, numeroBCP);
                 
-                // Agregar a cola de trabajos
-                memoriaPrincipal.encolarTrabajo(numeroBCP);
+                // Cambiar estado a LISTO y encolar
+                bcp.setEstado(EstadoProceso.LISTO);
+                memoriaPrincipal.actualizarBCP(numeroBCP, bcp);
+                memoriaPrincipal.encolarListo(numeroBCP);
                 
                 // Registrar información del proceso
                 int tiempoLlegada = calcularTiempoLlegada(cpuSeleccionado);
@@ -278,13 +311,16 @@ public class SistemaOperativoV2 {
                 // Actualizar distribución
                 distribucionProcesos.put(cpuSeleccionado, distribucionProcesos.get(cpuSeleccionado) + 1);
                 
+                // Notificar listeners
+                notificarProcesoNuevo(bcp);
+                
                 programasCargados++;
                 System.out.println("[SO] Programa cargado: " + nombrePrograma + 
                                  " → CPU " + cpuSeleccionado + " (Instrucciones: " + instruccionesValidas.size() + ")");
                 
             } catch (Exception e) {
                 System.err.println("[SO] Error al cargar programa " + nombrePrograma + ": " + e.getMessage());
-                programasPendientes.add(nombrePrograma); // Reintentar después
+                programasPendientes.add(nombrePrograma);
             }
         }
         
@@ -314,105 +350,141 @@ public class SistemaOperativoV2 {
      * Calcula tiempo de llegada con random 0-2
      */
     private int calcularTiempoLlegada(int cpu) {
-        int base = distribucionProcesos.get(cpu) * 3; // Base creciente
-        return base + random.nextInt(3); // Random 0-2
+        int base = distribucionProcesos.get(cpu) * 3;
+        return base + random.nextInt(3);
     }
     
-    // ========== EJECUCIÓN DEL SISTEMA ==========
+    // ========== EJECUCIÓN DEL SISTEMA - NUEVOS MÉTODOS ==========
     
     /**
-     * Inicia el sistema operativo
+     * Ejecuta UNA instrucción por cada CPU (modo paso a paso)
+     * @return true si se ejecutó al menos una instrucción
      */
-    public void iniciar() {
-        if (sistemaActivo) {
-            System.out.println("[SO] Sistema ya está activo");
-            return;
-        }
+    public synchronized boolean ejecutarPasoAPaso() {        
+        boolean seEjecutoAlgo = false;
         
-        sistemaActivo = true;
-        System.out.println("[SO] Sistema operativo iniciado");
-        
-        // Iniciar ejecución en cada CPU
         for (int cpu = 0; cpu < cantidadCPUs; cpu++) {
-            final int cpuId = cpu;
-            executorService.submit(() -> ejecutarCPU(cpuId));
+            if (ejecutarInstruccionEnCPU(cpu)) {
+                seEjecutoAlgo = true;
+            }
         }
+        
+        // Intentar cargar más procesos si hay pendientes
+        if (!programasPendientes.isEmpty()) {
+            cargarProgramasMemoriaPrincipal();
+        }
+        
+        return seEjecutoAlgo;
     }
     
     /**
-     * Detiene el sistema operativo
+     * Ejecuta UNA instrucción en un CPU específico
+     * @param cpuId ID del CPU (0-4)
+     * @return true si se ejecutó una instrucción
      */
-    public void detener() {
-        sistemaActivo = false;
-        executorService.shutdown();
-        
+    private synchronized boolean ejecutarInstruccionEnCPU(int cpuId) {
         try {
-            if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
-                executorService.shutdownNow();
+            // Seleccionar siguiente proceso según planificador
+            int numeroBCP = planificadores[cpuId].seleccionarSiguiente(memoriaPrincipal);
+            
+            if (numeroBCP < 0) {
+                cpuProcesoActual.put(cpuId, -1);
+                return false;
             }
-        } catch (InterruptedException e) {
-            executorService.shutdownNow();
-            Thread.currentThread().interrupt();
+            
+            // Guardar proceso actual del CPU
+            cpuProcesoActual.put(cpuId, numeroBCP);
+            
+            // Despachar proceso
+            despachador.despachar(numeroBCP);
+            BCP bcp = memoriaPrincipal.obtenerBCP(numeroBCP);
+            
+            if (bcp == null) {
+                return false;
+            }
+            
+            // Actualizar información del proceso
+            actualizarInfoProceso(bcp, EstadoProceso.EJECUCION, cpuId);
+            
+            // Ejecutar siguiente instrucción
+            boolean continuar = ejecutores[cpuId].ejecutarSiguiente();
+            
+            // Recargar BCP actualizado
+            bcp = memoriaPrincipal.obtenerBCP(numeroBCP);
+            
+            // Notificar ejecución
+            notificarProcesoEjecutado(cpuId, bcp);
+            
+            if (!continuar || bcp.getEstado() == EstadoProceso.FINALIZADO) {
+                // Proceso terminado
+                manejarProcesoTerminado(bcp, numeroBCP, cpuId);
+                cpuProcesoActual.put(cpuId, -1);
+            } else {
+                // Proceso continúa, devolver a cola de listos
+                bcp.setEstado(EstadoProceso.LISTO);
+                memoriaPrincipal.actualizarBCP(numeroBCP, bcp);
+                memoriaPrincipal.encolarListo(numeroBCP);
+                actualizarInfoProceso(bcp, EstadoProceso.LISTO, cpuId);
+            }
+            
+            return true;
+            
+        } catch (Exception e) {
+            System.err.println("[CPU " + cpuId + "] Error en ejecución: " + e.getMessage());
+            e.printStackTrace();
+            return false;
         }
-        
-        System.out.println("[SO] Sistema operativo detenido");
     }
     
     /**
-     * Ciclo de ejecución para cada CPU
+     * Inicia ejecución automática
      */
-    private void ejecutarCPU(int cpuId) {
-        System.out.println("[CPU " + cpuId + "] Iniciando ejecución");
+    public synchronized void iniciarEjecucionAutomatica() {        
+        sistemaActivo = true;
+        ejecucionPausada = false;
+        notificarEstadoCambiado();
+        System.out.println("[SO] Ejecución automática iniciada");
+    }
+    
+    /**
+     * Pausa la ejecución automática (mantiene el contexto)
+     */
+    public synchronized void pausarEjecucionAutomatica() {        
+        sistemaActivo = false;
+        ejecucionPausada = true;
         
-        while (sistemaActivo) {
-            try {
-                // Seleccionar siguiente proceso a ejecutar
-                int numeroBCP = planificadores[cpuId].seleccionarSiguiente(memoriaPrincipal);
-                
-                if (numeroBCP >= 0) {
-                    // Despachar proceso
-                    despachador.despachar(numeroBCP);
-                    BCP bcp = memoriaPrincipal.obtenerBCP(numeroBCP);
-                    
-                    if (bcp != null) {
-                        // Actualizar información del proceso
-                        actualizarInfoProceso(bcp, EstadoProceso.EJECUCION, cpuId);
-                        
-                        // Ejecutar siguiente instrucción
-                        boolean continuar = ejecutores[cpuId].ejecutarSiguiente();
-                        
-                        if (!continuar || bcp.getEstado() == EstadoProceso.FINALIZADO) {
-                            // Proceso terminado
-                            manejarProcesoTerminado(bcp, numeroBCP, cpuId);
-                        } else {
-                            // Proceso continúa, devolver a cola de listos
-                            bcp.setEstado(EstadoProceso.LISTO);
-                            memoriaPrincipal.actualizarBCP(numeroBCP, bcp);
-                            memoriaPrincipal.encolarListo(numeroBCP);
-                            actualizarInfoProceso(bcp, EstadoProceso.LISTO, cpuId);
-                        }
-                    }
-                } else {
-                    // No hay procesos listos, intentar cargar más
-                    if (memoriaPrincipal.colaTrabajosVacia() && programasPendientes.isEmpty()) {
-                        // No hay más trabajo, pausar brevemente
-                        Thread.sleep(100);
-                    } else if (memoriaPrincipal.colaListosVacia()) {
-                        // Cargar más procesos si es posible
-                        cargarProgramasMemoriaPrincipal();
-                    }
+        // Guardar contexto de todos los procesos en ejecución
+        for (int cpu = 0; cpu < cantidadCPUs; cpu++) {
+            int numeroBCP = cpuProcesoActual.get(cpu);
+            if (numeroBCP >= 0) {
+                BCP bcp = memoriaPrincipal.obtenerBCP(numeroBCP);
+                if (bcp != null && bcp.getEstado() == EstadoProceso.EJECUCION) {
+                    // Mantener el contexto guardado en el BCP
+                    ejecutores[cpu].getCPU().guardarContexto(bcp);
+                    memoriaPrincipal.actualizarBCP(numeroBCP, bcp);
                 }
-                
-                // Pequeña pausa para evitar uso excesivo de CPU
-                Thread.sleep(10);
-                
-            } catch (Exception e) {
-                System.err.println("[CPU " + cpuId + "] Error en ejecución: " + e.getMessage());
-                e.printStackTrace();
             }
         }
         
-        System.out.println("[CPU " + cpuId + "] Ejecución finalizada");
+        notificarEstadoCambiado();
+        System.out.println("[SO] Ejecución automática pausada - Contexto guardado");
+    }
+    
+    /**
+     * Detiene completamente la ejecución automática
+     */
+    public synchronized void detenerEjecucionAutomatica() {
+        sistemaActivo = false;
+        ejecucionPausada = false;
+        
+        // Detener todos los procesos en ejecución
+        for (int cpu = 0; cpu < cantidadCPUs; cpu++) {
+            cpuProcesoActual.put(cpu, -1);
+        }
+        
+        despachador.detener();
+        notificarEstadoCambiado();
+        System.out.println("[SO] Ejecución automática detenida");
     }
     
     /**
@@ -424,15 +496,18 @@ public class SistemaOperativoV2 {
             actualizarInfoProceso(bcp, EstadoProceso.FINALIZADO, cpuId);
             
             // Crear estadísticas
-            EstadisticasProceso estadisticas = new EstadisticasProceso(
-                bcp.getIdProceso(),
-                bcp.getNombreProceso(),
-                (long) informacionProcesos.get(bcp.getIdProceso()).tiempoInicio,
-                bcp.getTiempoCPUUsado(),
-                bcp.getTamanoProceso(),
-                EstadoProceso.FINALIZADO
-            );
-            estadisticasCompletados.add(estadisticas);
+            ProcesoInfo info = informacionProcesos.get(bcp.getIdProceso());
+            if (info != null) {
+                EstadisticasProceso estadisticas = new EstadisticasProceso(
+                    bcp.getIdProceso(),
+                    bcp.getNombreProceso(),
+                    (long) info.tiempoInicio,
+                    bcp.getTiempoCPUUsado(),
+                    bcp.getTamanoProceso(),
+                    EstadoProceso.FINALIZADO
+                );
+                estadisticasCompletados.add(estadisticas);
+            }
             
             // Liberar recursos
             memoriaPrincipal.liberarBCP(numeroBCP);
@@ -443,6 +518,9 @@ public class SistemaOperativoV2 {
             
             // Notificar planificador
             planificadores[cpuId].onProcesoFinalizado(bcp);
+            
+            // Notificar listeners
+            notificarProcesoFinalizado(cpuId, bcp);
             
             System.out.println("[CPU " + cpuId + "] Proceso finalizado: " + bcp.getNombreProceso());
             
@@ -470,6 +548,32 @@ public class SistemaOperativoV2 {
     // ========== MÉTODOS DE CONSULTA PARA INTERFAZ ==========
     
     /**
+     * Obtiene el BCP actualmente en ejecución en un CPU
+     */
+    public BCP getBCPEnCPU(int cpuId) {
+        if (cpuId < 0 || cpuId >= cantidadCPUs) {
+            return null;
+        }
+        
+        int numeroBCP = cpuProcesoActual.get(cpuId);
+        if (numeroBCP < 0) {
+            return null;
+        }
+        
+        return memoriaPrincipal.obtenerBCP(numeroBCP);
+    }
+    
+    /**
+     * Obtiene el ejecutor de un CPU específico
+     */
+    public EjecutorInstrucciones getEjecutor(int cpuId) {
+        if (cpuId < 0 || cpuId >= cantidadCPUs) {
+            return null;
+        }
+        return ejecutores[cpuId];
+    }
+    
+    /**
      * Obtiene información de todos los procesos para mostrar en tabla
      */
     public List<ProcesoInfo> getInformacionProcesos() {
@@ -482,6 +586,49 @@ public class SistemaOperativoV2 {
     public List<EstadisticasProceso> getEstadisticasCompletados() {
         return new ArrayList<>(estadisticasCompletados);
     }
+
+    /**
+     * Obtiene información de procesos para mostrar en tabla
+     */
+    public List<Object[]> getInformacionProcesosParaTabla() {
+        List<Object[]> datos = new ArrayList<>();
+
+        for (ProcesoInfo info : informacionProcesos.values()) {
+            Object[] fila = new Object[]{
+                info.nombre,
+                info.rafaga,
+                info.tiempoLlegada,
+                info.cpuAsignado,
+                info.estado.toString(),
+                info.tiempoRestante
+            };
+            datos.add(fila);
+        }
+
+        return datos;
+    }
+
+    /**
+     * Obtiene información específica de un proceso
+     */
+    public ProcesoInfo getInfoProceso(int idProceso) {
+        return informacionProcesos.get(idProceso);
+    }
+
+    /**
+     * Indica si aún hay procesos por ejecutar en el sistema.
+     * Retorna true si hay procesos en memoria principal o en la cola de pendientes.
+     */
+    public boolean hayProcesosPorEjecutar() {
+        // Hay procesos cargados en memoria principal (activos o listos)
+        boolean hayActivos = memoriaPrincipal.getCantidadBCPsActivos() > 0;
+
+        // Hay procesos pendientes en memoria secundaria
+        boolean hayPendientes = !programasPendientes.isEmpty();
+
+        // Si cualquiera de los dos es cierto, aún hay trabajo por ejecutar
+        return hayActivos || hayPendientes;
+    }    
     
     /**
      * Obtiene el estado actual del sistema
@@ -489,6 +636,7 @@ public class SistemaOperativoV2 {
     public Map<String, Object> getEstadoSistema() {
         Map<String, Object> estado = new HashMap<>();
         estado.put("activo", sistemaActivo);
+        estado.put("pausado", ejecucionPausada);
         estado.put("cpus", cantidadCPUs);
         estado.put("procesosActivos", memoriaPrincipal.getCantidadBCPsActivos());
         estado.put("procesosPendientes", programasPendientes.size());
@@ -505,29 +653,14 @@ public class SistemaOperativoV2 {
         return estado;
     }
     
-    /**
-     * Ejecuta una sola instrucción en todos los CPUs (para modo paso a paso)
-     */
-    public void ejecutarInstruccionPaso() {
-        if (!sistemaActivo) {
-            for (int cpu = 0; cpu < cantidadCPUs; cpu++) {
-                try {
-                    int numeroBCP = planificadores[cpu].seleccionarSiguiente(memoriaPrincipal);
-                    if (numeroBCP >= 0) {
-                        despachador.despachar(numeroBCP);
-                        ejecutores[cpu].ejecutarSiguiente();
-                    }
-                } catch (Exception e) {
-                    System.err.println("[CPU " + cpu + "] Error en ejecución paso: " + e.getMessage());
-                }
-            }
-        }
-    }
-    
     // ========== GETTERS ==========
     
     public boolean isSistemaActivo() {
         return sistemaActivo;
+    }
+    
+    public boolean isEjecucionPausada() {
+        return ejecucionPausada;
     }
     
     public int getCantidadCPUs() {
@@ -555,6 +688,13 @@ public class SistemaOperativoV2 {
             }
         }
         return bcps;
+    }
+    
+    public IPlanificador getPlanificador(int cpuId) {
+        if (cpuId >= 0 && cpuId < cantidadCPUs) {
+            return planificadores[cpuId];
+        }
+        return null;
     }
     
     /**
