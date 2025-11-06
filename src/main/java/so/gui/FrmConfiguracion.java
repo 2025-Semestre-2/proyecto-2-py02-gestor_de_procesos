@@ -9,7 +9,11 @@ import utils.NumericDocumentFilter;
 public class FrmConfiguracion extends javax.swing.JFrame {
     
     private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(FrmConfiguracion.class.getName());
-
+    
+    private static final int MIN_MEMORIA_SECUNDARIA = 512;
+    private static final int MIN_MEMORIA_VIRTUAL = 64;
+    private static final int MIN_MEMORIA_USUARIO = 488;
+    private static final int MIN_PARTICION_FIJA = 20;
     /**
      * Creates new form FrmConfiguracion
      */
@@ -20,10 +24,19 @@ public class FrmConfiguracion extends javax.swing.JFrame {
         configurarCheckBoxes();
         configurarValidaciones();
         configurarComboTipoFijo();
+        deshabilitarComponentesIniciales(); 
         this.setLocationRelativeTo(null);
     }
 
+    
+    private void deshabilitarComponentesIniciales() {
+        // Deshabilitar el combo de estrategias de memoria secundaria
+        jComboBox_estrategiasMemoriaSecundaria.setEnabled(false);
 
+        // Deshabilitar checkboxes
+        jCheckBox_paginacion.setEnabled(false);
+        jCheckBox_segmentacion.setEnabled(false);
+    }
     private void configurarComboCantidadCPUs() {
         // Primero ocultamos todo
         mostrarCPUs(1);
@@ -98,32 +111,54 @@ public class FrmConfiguracion extends javax.swing.JFrame {
 
     private void configurarValidaciones() {
         jButton_Config.addActionListener(e -> {
-            try {
-                int memoriaVirtual = Integer.parseInt(jTextField_totalMemoriaVirtual.getText());
-                int memoriaSecundaria = Integer.parseInt(jTextField_totalMemoriaSecundaria.getText());
-                int tamanoUsuario = Integer.parseInt(jTextField_totalUsuario.getText());
-                int particionFija = jTextField_tamanoParticionFija.isEnabled() && !jTextField_tamanoParticionFija.getText().isEmpty()
-                        ? Integer.parseInt(jTextField_tamanoParticionFija.getText()) : 0;
+            resetearColoresCampos(); // Limpiar colores
+            
+            // Validar campos requeridos con mínimos
+            if (!validarCamposRequeridos()) {
+                return;
+            }
 
+            try {
+                int memoriaSecundaria = Integer.parseInt(jTextField_totalMemoriaSecundaria.getText().trim());
+                int memoriaVirtual = Integer.parseInt(jTextField_totalMemoriaVirtual.getText().trim());
+                int tamanoUsuario = Integer.parseInt(jTextField_totalUsuario.getText().trim());
+
+                // Validar memoria virtual vs secundaria
                 if (memoriaVirtual > memoriaSecundaria) {
                     javax.swing.JOptionPane.showMessageDialog(this,
-                            "El tamaño de la memoria virtual no puede ser mayor que la memoria secundaria.",
+                            "El tamaño de la memoria virtual (" + memoriaVirtual + 
+                            ") no puede ser mayor que la memoria secundaria (" + memoriaSecundaria + ").",
                             "Error de configuración",
                             javax.swing.JOptionPane.ERROR_MESSAGE);
+                    jTextField_totalMemoriaVirtual.setBackground(new java.awt.Color(255, 200, 200));
                     return;
                 }
 
-                if (particionFija > tamanoUsuario) {
+                // Validar tamaño total para usuario
+                int SO_SIZE = 1000;
+                if (tamanoUsuario > (SO_SIZE -memoriaSecundaria )) {
                     javax.swing.JOptionPane.showMessageDialog(this,
-                            "El tamaño de la partición fija no puede ser mayor que la memoria del usuario.",
+                            "El tamaño para el usuario (" + tamanoUsuario + 
+                            ") no puede ser mayor que la memoria disponible (" + (memoriaSecundaria - SO_SIZE) + ").",
                             "Error de configuración",
                             javax.swing.JOptionPane.ERROR_MESSAGE);
+                    jTextField_totalUsuario.setBackground(new java.awt.Color(255, 200, 200));
                     return;
+                }
+
+                if (jCheckBox_particionamientoFijo.isSelected()) {
+                    if (!validarParticionFija(tamanoUsuario)) {
+                        return;
+                    }
                 }
 
                 javax.swing.JOptionPane.showMessageDialog(this,
-                        "Configuración válida.",
-                        "Éxito",
+                        "Configuración válida.\n\n" +
+                        "Memoria Secundaria: " + memoriaSecundaria + "\n" +
+                        "Memoria Virtual: " + memoriaVirtual + "\n" +
+                        "Memoria Usuario: " + tamanoUsuario + "\n" +
+                        "CPUs configurados: " + jComboBox_cantidadCPUs.getSelectedItem(),
+                        "Configuración exitosa",
                         javax.swing.JOptionPane.INFORMATION_MESSAGE);
 
             } catch (NumberFormatException ex) {
@@ -133,7 +168,133 @@ public class FrmConfiguracion extends javax.swing.JFrame {
                         javax.swing.JOptionPane.ERROR_MESSAGE);
             }
         });
-    }    
+    }
+    private boolean validarCamposRequeridos() {
+        java.util.List<String> camposVacios = new java.util.ArrayList<>();
+        boolean todosValidos = true;
+        
+        // Validar memoria secundaria
+        if (jTextField_totalMemoriaSecundaria.getText().trim().isEmpty()) {
+            camposVacios.add("- Tamaño total de memoria secundaria (mínimo " + MIN_MEMORIA_SECUNDARIA + ")");
+            jTextField_totalMemoriaSecundaria.setBackground(new java.awt.Color(255, 200, 200));
+            todosValidos = false;
+        } else {
+            try {
+                int valor = Integer.parseInt(jTextField_totalMemoriaSecundaria.getText().trim());
+                if (valor < MIN_MEMORIA_SECUNDARIA) {
+                    camposVacios.add("- Memoria secundaria debe ser al menos " + MIN_MEMORIA_SECUNDARIA + " (ingresado: " + valor + ")");
+                    jTextField_totalMemoriaSecundaria.setBackground(new java.awt.Color(255, 200, 200));
+                    todosValidos = false;
+                }
+            } catch (NumberFormatException ex) {
+                camposVacios.add("- Tamaño total de memoria secundaria (valor inválido)");
+                jTextField_totalMemoriaSecundaria.setBackground(new java.awt.Color(255, 200, 200));
+                todosValidos = false;
+            }
+        }
+        
+        // Validar memoria virtual
+        if (jTextField_totalMemoriaVirtual.getText().trim().isEmpty()) {
+            camposVacios.add("- Tamaño de memoria virtual (mínimo " + MIN_MEMORIA_VIRTUAL + ")");
+            jTextField_totalMemoriaVirtual.setBackground(new java.awt.Color(255, 200, 200));
+            todosValidos = false;
+        } else {
+            try {
+                int valor = Integer.parseInt(jTextField_totalMemoriaVirtual.getText().trim());
+                if (valor < MIN_MEMORIA_VIRTUAL) {
+                    camposVacios.add("- Memoria virtual debe ser al menos " + MIN_MEMORIA_VIRTUAL + " (ingresado: " + valor + ")");
+                    jTextField_totalMemoriaVirtual.setBackground(new java.awt.Color(255, 200, 200));
+                    todosValidos = false;
+                }
+            } catch (NumberFormatException ex) {
+                camposVacios.add("- Tamaño de memoria virtual (valor inválido)");
+                jTextField_totalMemoriaVirtual.setBackground(new java.awt.Color(255, 200, 200));
+                todosValidos = false;
+            }
+        }
+        
+        // Validar memoria usuario
+        if (jTextField_totalUsuario.getText().trim().isEmpty()) {
+            camposVacios.add("- Tamaño para el usuario (mínimo " + MIN_MEMORIA_USUARIO + ")");
+            jTextField_totalUsuario.setBackground(new java.awt.Color(255, 200, 200));
+            todosValidos = false;
+        } else {
+            try {
+                int valor = Integer.parseInt(jTextField_totalUsuario.getText().trim());
+                if (valor < MIN_MEMORIA_USUARIO) {
+                    camposVacios.add("- Memoria usuario debe ser al menos " + MIN_MEMORIA_USUARIO + " (ingresado: " + valor + ")");
+                    jTextField_totalUsuario.setBackground(new java.awt.Color(255, 200, 200));
+                    todosValidos = false;
+                }
+            } catch (NumberFormatException ex) {
+                camposVacios.add("- Tamaño para el usuario (valor inválido)");
+                jTextField_totalUsuario.setBackground(new java.awt.Color(255, 200, 200));
+                todosValidos = false;
+            }
+        }
+        
+        if (!todosValidos) {
+            String mensaje = "Los siguientes campos tienen errores:\n\n" + 
+                            String.join("\n", camposVacios);
+            javax.swing.JOptionPane.showMessageDialog(this,
+                    mensaje,
+                    "Errores de validación",
+                    javax.swing.JOptionPane.WARNING_MESSAGE);
+            return false;
+        }
+        
+        return true;
+    }
+    
+    private boolean validarParticionFija(int tamanoUsuario) {
+        String tipoFijo = (String) jComboBox_tipoFijo.getSelectedItem();
+        
+        if ("Igual".equalsIgnoreCase(tipoFijo)) {
+            if (jTextField_tamanoParticionFija.getText().trim().isEmpty()) {
+                javax.swing.JOptionPane.showMessageDialog(this,
+                        "Debe especificar el tamaño de la partición fija (mínimo " + MIN_PARTICION_FIJA + ").",
+                        "Error de validación",
+                        javax.swing.JOptionPane.WARNING_MESSAGE);
+                jTextField_tamanoParticionFija.setBackground(new java.awt.Color(255, 200, 200));
+                return false;
+            }
+            
+            try {
+                int particionFija = Integer.parseInt(jTextField_tamanoParticionFija.getText().trim());
+                
+                if (particionFija < MIN_PARTICION_FIJA) {
+                    javax.swing.JOptionPane.showMessageDialog(this,
+                            "El tamaño de la partición fija debe ser al menos " + MIN_PARTICION_FIJA + 
+                            " (ingresado: " + particionFija + ").",
+                            "Error de validación",
+                            javax.swing.JOptionPane.ERROR_MESSAGE);
+                    jTextField_tamanoParticionFija.setBackground(new java.awt.Color(255, 200, 200));
+                    return false;
+                }
+                
+                if (particionFija > tamanoUsuario) {
+                    javax.swing.JOptionPane.showMessageDialog(this,
+                            "El tamaño de la partición fija (" + particionFija + 
+                            ") no puede ser mayor que la memoria del usuario (" + tamanoUsuario + ").",
+                            "Error de configuración",
+                            javax.swing.JOptionPane.ERROR_MESSAGE);
+                    jTextField_tamanoParticionFija.setBackground(new java.awt.Color(255, 200, 200));
+                    return false;
+                }
+            } catch (NumberFormatException ex) {
+                javax.swing.JOptionPane.showMessageDialog(this,
+                        "El tamaño de la partición debe ser un número válido.",
+                        "Error de formato",
+                        javax.swing.JOptionPane.ERROR_MESSAGE);
+                jTextField_tamanoParticionFija.setBackground(new java.awt.Color(255, 200, 200));
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    
     
     private void aplicarFiltrosNumericos() {
         javax.swing.text.AbstractDocument doc1 = (javax.swing.text.AbstractDocument) jTextField_totalMemoriaVirtual.getDocument();
@@ -145,8 +306,73 @@ public class FrmConfiguracion extends javax.swing.JFrame {
         doc2.setDocumentFilter(new NumericDocumentFilter());
         doc3.setDocumentFilter(new NumericDocumentFilter());
         doc4.setDocumentFilter(new NumericDocumentFilter());
+        
+        // Agregar validación en tiempo real (mientras escriben)
+        agregarValidacionTiempoReal(jTextField_totalMemoriaVirtual);
+        agregarValidacionTiempoReal(jTextField_totalUsuario);
+        agregarValidacionTiempoReal(jTextField_totalMemoriaSecundaria);
+        agregarValidacionTiempoReal(jTextField_tamanoParticionFija);
     }    
     
+    private void agregarValidacionTiempoReal(javax.swing.JTextField textField) {
+        textField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            @Override
+            public void insertUpdate(javax.swing.event.DocumentEvent e) {
+                validarCampo(textField);
+            }
+
+            @Override
+            public void removeUpdate(javax.swing.event.DocumentEvent e) {
+                validarCampo(textField);
+            }
+
+            @Override
+            public void changedUpdate(javax.swing.event.DocumentEvent e) {
+                validarCampo(textField);
+            }
+        });
+    }
+    private void validarCampo(javax.swing.JTextField textField) {
+        String texto = textField.getText().trim();
+
+        if (texto.isEmpty()) {
+            textField.setBackground(java.awt.Color.WHITE);
+            return;
+        }
+
+        try {
+            int valor = Integer.parseInt(texto);
+            boolean esValido = false;
+
+            // Validar según el campo específico
+            if (textField == jTextField_totalMemoriaSecundaria) {
+                esValido = valor >= MIN_MEMORIA_SECUNDARIA;
+            } else if (textField == jTextField_totalMemoriaVirtual) {
+                esValido = valor >= MIN_MEMORIA_VIRTUAL;
+            } else if (textField == jTextField_totalUsuario) {
+                esValido = valor >= MIN_MEMORIA_USUARIO;
+            } else if (textField == jTextField_tamanoParticionFija) {
+                esValido = valor >= MIN_PARTICION_FIJA;
+            } else {
+                esValido = valor > 0;
+            }
+
+            if (esValido) {
+                textField.setBackground(new java.awt.Color(200, 255, 200)); // Verde claro
+            } else {
+                textField.setBackground(new java.awt.Color(255, 200, 200)); // Rojo claro
+            }
+        } catch (NumberFormatException ex) {
+            textField.setBackground(new java.awt.Color(255, 200, 200));
+        }
+    }
+    
+    private void resetearColoresCampos() {
+        jTextField_totalMemoriaSecundaria.setBackground(java.awt.Color.WHITE);
+        jTextField_totalMemoriaVirtual.setBackground(java.awt.Color.WHITE);
+        jTextField_totalUsuario.setBackground(java.awt.Color.WHITE);
+        jTextField_tamanoParticionFija.setBackground(java.awt.Color.WHITE);
+    }
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -217,12 +443,6 @@ public class FrmConfiguracion extends javax.swing.JFrame {
 
         jLabel7.setFont(new java.awt.Font("Segoe UI", 1, 14)); // NOI18N
         jLabel7.setText("Tamaño para el usuario:");
-
-        jTextField_totalUsuario.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jTextField_totalUsuarioActionPerformed(evt);
-            }
-        });
 
         jLabel8.setFont(new java.awt.Font("Segoe UI", 1, 18)); // NOI18N
         jLabel8.setText("Memoria Principal");
@@ -439,10 +659,6 @@ public class FrmConfiguracion extends javax.swing.JFrame {
 
         pack();
     }// </editor-fold>//GEN-END:initComponents
-
-    private void jTextField_totalUsuarioActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jTextField_totalUsuarioActionPerformed
-        // TODO add your handling code here:
-    }//GEN-LAST:event_jTextField_totalUsuarioActionPerformed
 
     /**
      * @param args the command line arguments
