@@ -266,6 +266,14 @@ public class SistemaOperativoV2 {
                 
                 // Seleccionar CPU para distribución balanceada
                 int cpuSeleccionado = seleccionarCPUBalanceado();
+
+                int procesosEnCPU = distribucionProcesos.get(cpuSeleccionado);
+
+                // Límite de 5 procesos por CPU
+                if (procesosEnCPU >= 5) {
+                    System.out.println("[SO] CPU " + cpuSeleccionado + " alcanzó límite de 5 procesos");
+                    continue; // Saltar este CPU, intentar con otro
+                }
                 
                 // Cargar instrucciones a memoria principal
                 Instruccion[] arrayInstrucciones = instruccionesValidas.toArray(new Instruccion[0]);
@@ -279,7 +287,7 @@ public class SistemaOperativoV2 {
                 
                 // Crear BCP
                 int idProceso = memoriaPrincipal.generarNuevoIDProceso();
-                BCP bcp = new BCP(idProceso, nombrePrograma, infoAsignacion.direccionBase, instruccionesValidas.size());
+                BCP bcp = new BCP(idProceso, nombrePrograma, infoAsignacion.direccionBase, instruccionesValidas.size());                
                 
                 // Asignar a memoria principal
                 int numeroBCP = memoriaPrincipal.crearBCP(bcp);
@@ -302,6 +310,7 @@ public class SistemaOperativoV2 {
                     idProceso, nombrePrograma, cpuSeleccionado, 
                     tiempoLlegada, instruccionesValidas.size(), System.currentTimeMillis()
                 );
+                bcp.setTiempoLlegadaProgramado(tiempoLlegada);
                 info.estado = EstadoProceso.LISTO;
                 informacionProcesos.put(idProceso, info);
                 
@@ -383,55 +392,67 @@ public class SistemaOperativoV2 {
      * @return true si se ejecutó una instrucción
      */
     private synchronized boolean ejecutarInstruccionEnCPU(int cpuId) {
-        try {
-            // Seleccionar siguiente proceso según planificador
+        try {            
+            // 1. VERIFICAR PROCESO ACTUAL
+            int procesoActual = cpuProcesoActual.get(cpuId);
+            if (procesoActual >= 0) {
+                BCP bcpActual = memoriaPrincipal.obtenerBCP(procesoActual);
+                ProcesoInfo info = informacionProcesos.get(bcpActual.getIdProceso());
+                if (info != null) {
+                    info.tiempoRestante--;
+                }
+
+                int[] colaListos = memoriaPrincipal.obtenerColaListos();
+                for (int numeroBCP : colaListos) {
+                    BCP bcp = memoriaPrincipal.obtenerBCP(numeroBCP);
+                    if (bcp != null && bcp.getEstado() == EstadoProceso.LISTO) {
+                        bcp.incrementarTiempoEspera();
+                        memoriaPrincipal.actualizarBCP(numeroBCP, bcp);
+                    }
+                }
+                
+                if (bcpActual != null && bcpActual.getEstado() == EstadoProceso.EJECUCION) {
+                    // Continuar ejecutando el proceso actual según el algoritmo
+                    boolean continuar = ejecutores[cpuId].ejecutarSiguiente();
+                    bcpActual = memoriaPrincipal.obtenerBCP(procesoActual);
+
+                    if (!continuar || bcpActual.getEstado() == EstadoProceso.FINALIZADO) {
+                        manejarProcesoTerminado(bcpActual, procesoActual, cpuId);
+                        cpuProcesoActual.put(cpuId, -1);
+                    }
+                    return true;
+                }
+            }
+
+            // 2. SELECCIONAR NUEVO PROCESO SOLO SI NO HAY UNO EN EJECUCIÓN
             int numeroBCP = planificadores[cpuId].seleccionarSiguiente(memoriaPrincipal);
-            
             if (numeroBCP < 0) {
-                cpuProcesoActual.put(cpuId, -1);
                 return false;
             }
-            
-            // Guardar proceso actual del CPU
+
+            // 3. DESPACHAR NUEVO PROCESO
             cpuProcesoActual.put(cpuId, numeroBCP);
-            
-            // Despachar proceso
             despachador.despachar(numeroBCP);
             BCP bcp = memoriaPrincipal.obtenerBCP(numeroBCP);
-            
-            if (bcp == null) {
-                return false;
-            }
-            
-            // Actualizar información del proceso
+
+            // 4. ACTUALIZAR ESTADO INMEDIATAMENTE
             actualizarInfoProceso(bcp, EstadoProceso.EJECUCION, cpuId);
-            
-            // Ejecutar siguiente instrucción
+
+            // 5. EJECUTAR PRIMERA INSTRUCCIÓN
             boolean continuar = ejecutores[cpuId].ejecutarSiguiente();
-            
-            // Recargar BCP actualizado
             bcp = memoriaPrincipal.obtenerBCP(numeroBCP);
-            
-            // Notificar ejecución
+
             notificarProcesoEjecutado(cpuId, bcp);
-            
+
             if (!continuar || bcp.getEstado() == EstadoProceso.FINALIZADO) {
-                // Proceso terminado
                 manejarProcesoTerminado(bcp, numeroBCP, cpuId);
                 cpuProcesoActual.put(cpuId, -1);
-            } else {
-                // Proceso continúa, devolver a cola de listos
-                bcp.setEstado(EstadoProceso.LISTO);
-                memoriaPrincipal.actualizarBCP(numeroBCP, bcp);
-                memoriaPrincipal.encolarListo(numeroBCP);
-                actualizarInfoProceso(bcp, EstadoProceso.LISTO, cpuId);
             }
-            
+
             return true;
-            
+
         } catch (Exception e) {
-            System.err.println("[CPU " + cpuId + "] Error en ejecución: " + e.getMessage());
-            e.printStackTrace();
+            System.err.println("[CPU " + cpuId + "] Error: " + e.getMessage());
             return false;
         }
     }
@@ -492,10 +513,12 @@ public class SistemaOperativoV2 {
      */
     private void manejarProcesoTerminado(BCP bcp, int numeroBCP, int cpuId) {
         try {
-            // Actualizar información
+            // 1. ACTUALIZAR ESTADO A FINALIZADO
+            bcp.setEstado(EstadoProceso.FINALIZADO);
+            memoriaPrincipal.actualizarBCP(numeroBCP, bcp);
             actualizarInfoProceso(bcp, EstadoProceso.FINALIZADO, cpuId);
-            
-            // Crear estadísticas
+
+            // 2. CREAR ESTADÍSTICAS (NO ELIMINAR DE informacionProcesos)
             ProcesoInfo info = informacionProcesos.get(bcp.getIdProceso());
             if (info != null) {
                 EstadisticasProceso estadisticas = new EstadisticasProceso(
@@ -507,28 +530,31 @@ public class SistemaOperativoV2 {
                     EstadoProceso.FINALIZADO
                 );
                 estadisticasCompletados.add(estadisticas);
+
+                // ACTUALIZAR INFO PERO NO ELIMINAR
+                info.estado = EstadoProceso.FINALIZADO;
+                info.tiempoRestante = 0;
             }
-            
-            // Liberar recursos
+
+            // 3. LIBERAR MEMORIA DEL PROCESO
             memoriaPrincipal.liberarBCP(numeroBCP);
-            informacionProcesos.remove(bcp.getIdProceso());
-            
-            // Actualizar distribución
+
+            // 4. ACTUALIZAR DISTRIBUCIÓN
             distribucionProcesos.put(cpuId, distribucionProcesos.get(cpuId) - 1);
+
+            if (!programasPendientes.isEmpty() && memoriaPrincipal.getCantidadBCPsActivos() < memoriaPrincipal.getMaxProcesos()) {
+                int programasCargados = cargarProgramasMemoriaPrincipal();
+                if (programasCargados > 0) {
+                    System.out.println("[SO] " + programasCargados + " nuevos procesos cargados después de finalizar " + bcp.getNombreProceso());
+                }
+            }            
             
-            // Notificar planificador
+            // 5. NOTIFICAR
             planificadores[cpuId].onProcesoFinalizado(bcp);
-            
-            // Notificar listeners
             notificarProcesoFinalizado(cpuId, bcp);
-            
+
             System.out.println("[CPU " + cpuId + "] Proceso finalizado: " + bcp.getNombreProceso());
-            
-            // Cargar nuevo proceso si hay pendientes
-            if (!programasPendientes.isEmpty()) {
-                cargarProgramasMemoriaPrincipal();
-            }
-            
+
         } catch (Exception e) {
             System.err.println("[SO] Error al manejar proceso terminado: " + e.getMessage());
         }

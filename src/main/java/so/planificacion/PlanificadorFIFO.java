@@ -2,6 +2,7 @@ package so.planificacion;
 
 import so.memoria.MemoriaPrincipalV2;
 import so.gestordeprocesos.BCP;
+import so.gestordeprocesos.EstadoProceso;
 
 /**
  * Implementación del algoritmo de planificación FIFO (First In First Out).
@@ -19,8 +20,21 @@ public class PlanificadorFIFO implements IPlanificador {
     
     @Override
     public int seleccionarSiguiente(MemoriaPrincipalV2 memoria) {
-        // FIFO simplemente desencola el primer elemento de la cola de listos
-        return memoria.desencolarListo();
+        int[] colaListos = memoria.obtenerColaListos();
+
+        if (colaListos.length == 0) {
+            return -1;
+        }
+
+        // Para FIFO, simplemente el primero de la cola que haya llegado
+        for (int numeroBCP : colaListos) {
+            BCP bcp = memoria.obtenerBCP(numeroBCP);
+            if (bcp != null && bcp.getEstado() == EstadoProceso.LISTO) {
+                return memoria.desencolarListo();
+            }
+        }
+
+        return -1;
     }
     
     @Override

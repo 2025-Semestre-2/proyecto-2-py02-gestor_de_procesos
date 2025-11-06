@@ -78,7 +78,7 @@ public class FrmMain extends javax.swing.JFrame {
             
             // Planificadores (FIFO para CPU 0, SJF para CPU 1)
             IPlanificador[] planificadores = new IPlanificador[] {
-                new PlanificadorRR()              
+                new PlanificadorHRRN()
             };
             
             // Crear sistema operativo
@@ -454,32 +454,7 @@ public class FrmMain extends javax.swing.JFrame {
             };
             modelo.addRow(filaTabla);
         }
-
-        // Actualizar estadísticas en la consola
-        panelConsola.escribir("✓ Tabla de procesos actualizada: " + datosProcesos.size() + " procesos");
-
-        // Mostrar resumen por CPU
-        mostrarResumenCPUs();
-    }
-
-    // Método para mostrar resumen de distribución por CPUs
-    private void mostrarResumenCPUs() {
-        if (sistemaOperativo == null) return;
-
-        Map<Integer, Integer> conteoPorCPU = new HashMap<>();
-        List<Object[]> datosProcesos = sistemaOperativo.getInformacionProcesosParaTabla();
-
-        for (Object[] fila : datosProcesos) {
-            Integer cpu = (Integer) fila[3];
-            conteoPorCPU.put(cpu, conteoPorCPU.getOrDefault(cpu, 0) + 1);
-        }
-
-        panelConsola.escribir("--- Distribución por CPUs ---");
-        for (Map.Entry<Integer, Integer> entry : conteoPorCPU.entrySet()) {
-            panelConsola.escribir("  CPU " + entry.getKey() + ": " + entry.getValue() + " procesos");
-        }
-        panelConsola.escribir("-----------------------------");
-    }    
+    }   
     
     // Nuevo método para inicializar la tabla de información de procesos
     private void inicializarTablaInfoProcesos() {
@@ -674,7 +649,7 @@ public class FrmMain extends javax.swing.JFrame {
         jButton_pasoApaso.setEnabled(true);
         jButton_iniciarPrograma.setEnabled(true);
         
-        panelConsola.escribir("⏹ Ejecución automática detenida");
+        panelConsola.escribir("Ejecución automática detenida");
         
         // Limpiar paneles de CPU
         for (int i = 0; i < sistemaOperativo.getCantidadCPUs(); i++) {
@@ -688,6 +663,9 @@ public class FrmMain extends javax.swing.JFrame {
     private void ejecutarCicloAutomatico() {
         try {
             boolean seEjecutoAlgo = sistemaOperativo.ejecutarPasoAPaso();
+            
+            actualizarTablaMemoriaPrincipal();
+            
             // Actualizar todos los paneles
             for (int i = 0; i < sistemaOperativo.getCantidadCPUs(); i++) {
                 actualizarPanelCPU(i);
@@ -723,7 +701,7 @@ public class FrmMain extends javax.swing.JFrame {
             boolean seEjecutoAlgo = sistemaOperativo.ejecutarPasoAPaso();
             
             if (seEjecutoAlgo) {
-                panelConsola.escribir("→ Paso ejecutado");
+                actualizarTablaMemoriaPrincipal();
             } else {
                 panelConsola.escribir("ℹ No hay procesos listos para ejecutar");
             }

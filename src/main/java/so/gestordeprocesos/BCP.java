@@ -46,6 +46,8 @@ public class BCP {
     private int tiempoCPUUsado; // segundos acumulados
     private int tiempoEspera; // para HRRN
     private int quantumRestante; // para Round Robin
+    private int tiempoLlegadaProgramado;
+    private long timestampListo;
     
     // ========== CONTROL DE FLUJO ==========
     private int flagComparacion; // -1: menor, 0: igual, 1: mayor (para CMP)
@@ -635,10 +637,31 @@ public class BCP {
         this.quantumRestante = quantumRestante;
     }
 
+    public int getTiempoLlegadaProgramado() {
+        return tiempoLlegadaProgramado;
+    }
+    
+    public void setTiempoLlegadaProgramado(int tiempoLlegada) {
+        this.tiempoLlegadaProgramado = tiempoLlegada;
+    }
+    
+    public long getTimestampListo() {
+        return timestampListo;
+    }
+    
+    public void setTimestampListo(long timestamp) {
+        this.timestampListo = timestamp;
+    }
+    
+    // Método para verificar si el proceso ya llegó
+    public boolean haLlegado(long tiempoSimulacionActual) {
+        return tiempoSimulacionActual >= tiempoLlegadaProgramado;
+    }    
+    
     public int getFlagComparacion() {
         return flagComparacion;
     }
-
+    
     public void setFlagComparacion(int flagComparacion) {
         this.flagComparacion = flagComparacion;
     }
